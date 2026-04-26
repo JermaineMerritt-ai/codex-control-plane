@@ -73,6 +73,8 @@ The script walks: health → `POST /chat` → wait for the chat job → find the
 
 A shell variant lives at [scripts/demo_gmail_flow.sh](scripts/demo_gmail_flow.sh).
 
+**2–3 minute presenter script (what to say + expected outputs):** [docs/DEMO_WALKTHROUGH.md](docs/DEMO_WALKTHROUGH.md).
+
 ---
 
 ## What is intentionally out of scope (for now)
