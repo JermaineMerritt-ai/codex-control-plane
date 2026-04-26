@@ -94,6 +94,88 @@ function Wait-JobTerminal {
     return $null
 }
 
+function Write-RunSummary {
+    <#
+      Human-readable trust surface: what happened, ids, and audit chain for this run only.
+    #>
+    param(
+        [string] $RequestMessage,
+        [string] $ChatJobId,
+        [string] $ApprovalId,
+        [string] $ExecutionJobId,
+        $SendJob,
+        $Delivery,
+        $Audit
+    )
+    $reqPreview = if ($RequestMessage.Length -gt 100) { $RequestMessage.Substring(0, 100) + "..." } else { $RequestMessage }
+    $sendResultStatus = $null
+    if ($SendJob.result) {
+        if ($SendJob.result.status) { $sendResultStatus = $SendJob.result.status }
+    }
+
+    Write-Host ""
+    Write-Host "=========================" -ForegroundColor White
+    Write-Host "FINAL RESULT (this run)" -ForegroundColor White
+    Write-Host "=========================" -ForegroundColor White
+    Write-Host ""
+    Write-Host "REQUEST" -ForegroundColor Cyan
+    Write-Host "  $reqPreview" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "STATUS" -ForegroundColor Cyan
+    Write-Host "  [x] Classified and approval gate applied" -ForegroundColor Green
+    Write-Host "  [x] Approved by operator" -ForegroundColor Green
+    if ($SendJob.status -eq "succeeded" -and $sendResultStatus -eq "sent") {
+        Write-Host "  [x] Send job succeeded (outbound send recorded)" -ForegroundColor Green
+    } elseif ($SendJob.status -eq "succeeded") {
+        Write-Host "  [x] Send job completed (status=$sendResultStatus)" -ForegroundColor Green
+    } else {
+        Write-Host "  [ ] Send job: $($SendJob.status)" -ForegroundColor Yellow
+    }
+    if ($null -ne $Delivery -and $Delivery.status) {
+        Write-Host "  [x] Delivery row: $($Delivery.status)" -ForegroundColor Green
+    } else {
+        Write-Host "  [ ] Delivery row not available" -ForegroundColor DarkYellow
+    }
+    Write-Host ""
+    Write-Host "DETAILS" -ForegroundColor Cyan
+    Write-Host "  Chat (orchestrate) job:  $ChatJobId" -ForegroundColor Gray
+    Write-Host "  Approval id:            $ApprovalId" -ForegroundColor Gray
+    Write-Host "  Execution (send) job:   $ExecutionJobId" -ForegroundColor Gray
+    if ($null -ne $Delivery) {
+        if ($Delivery.gmail_message_id) {
+            Write-Host "  Message id:             $($Delivery.gmail_message_id)" -ForegroundColor Gray
+        }
+        if ($Delivery.thread_external_id) {
+            Write-Host "  Thread (external id):  $($Delivery.thread_external_id)" -ForegroundColor Gray
+        }
+        if ($Delivery.updated_at) {
+            Write-Host "  Last updated:           $($Delivery.updated_at)" -ForegroundColor Gray
+        }
+    }
+    Write-Host ""
+    Write-Host "AUDIT (this run)" -ForegroundColor Cyan
+    $relevant = @()
+    if ($Audit.items) {
+        foreach ($ev in $Audit.items) {
+            if ($ev.resource_id -eq $ApprovalId -or $ev.resource_id -eq $ExecutionJobId) {
+                $relevant += $ev
+            }
+        }
+    }
+    $relevant = $relevant | Sort-Object { $_.created_at }
+    $chain = @("approval.created", "approval.approved", "email.send_approved.enqueued", "email.send_approved.succeeded")
+    foreach ($name in $chain) {
+        $hit = $relevant | Where-Object { $_.action -eq $name } | Select-Object -First 1
+        if ($hit) {
+            Write-Host "  - $($hit.action)  ($($hit.resource_type)/$($hit.resource_id))" -ForegroundColor Green
+        } else {
+            Write-Host "  - (missing) $name" -ForegroundColor DarkYellow
+        }
+    }
+    Write-Host ""
+    Write-Host "Full JSON for this run is in the steps above. Tip: use GET /audit?resource_id=$ExecutionJobId to narrow in other tools." -ForegroundColor DarkGray
+}
+
 # --- 0) Health
 Write-Step "0. Health"
 try {
@@ -172,6 +254,7 @@ if ($sendJob.status -ne "succeeded") {
 
 # --- 5) Delivery
 Write-Step "5. GET /email/deliveries/by-job/{execution_job_id} (outcome)"
+$delivery = $null
 try {
     $delivery = Invoke-RestMethod -Uri "$BaseUrl/email/deliveries/by-job/$executionJobId" -Method Get -Headers (Get-OpHeaders)
     $delivery | ConvertTo-Json -Depth 6 | Write-Host
@@ -190,6 +273,7 @@ $audit.items | ForEach-Object {
     }
 } | Format-Table -AutoSize
 
-Write-Host ""
+Write-RunSummary -RequestMessage $Message -ChatJobId $chatJobId -ApprovalId $approvalId -ExecutionJobId $executionJobId -SendJob $sendJob -Delivery $delivery -Audit $audit
+
 Write-Host "Done. Look for: approval.created, approval.approved, email.send_approved.enqueued, email.send_approved.succeeded" -ForegroundColor Green
 Write-Host "Chat (orchestrate) job: $chatJobId | Send job: $executionJobId" -ForegroundColor DarkGray

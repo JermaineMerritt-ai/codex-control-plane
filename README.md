@@ -69,7 +69,7 @@ cd C:\path\to\codex-control-plane
 .\scripts\demo_gmail_control_plane.ps1 -ThreadId "YOUR_GMAIL_THREAD_ID" -BaseUrl "http://127.0.0.1:8010"
 ```
 
-The script walks: health → `POST /chat` → wait for the chat job → find the **matching** pending approval → `POST /approve` → wait for `email.send_approved` → delivery by job id → `GET /audit`. Use a real thread id for live Gmail; stub mode still runs the same control-plane steps.
+The script walks: health → `POST /chat` → wait for the chat job → find the **matching** pending approval → `POST /approve` → wait for `email.send_approved` → delivery by job id → `GET /audit`, then prints a **FINAL RESULT** block (ids + audit chain for this run). To summarize an existing `email.send_approved` job id, use [scripts/show_run_summary.ps1](scripts/show_run_summary.ps1). Use a real thread id for live Gmail; stub mode still runs the same control-plane steps.
 
 A shell variant lives at [scripts/demo_gmail_flow.sh](scripts/demo_gmail_flow.sh).
 

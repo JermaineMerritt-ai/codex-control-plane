@@ -45,6 +45,8 @@ cd C:\path\to\codex-control-plane
 .\scripts\demo_gmail_control_plane.ps1 -ThreadId "YOUR_THREAD_ID" -BaseUrl "http://127.0.0.1:8010"
 ```
 
+At the end of a successful run, the script prints a **FINAL RESULT (this run)** block: request preview, checkmarks for approval/send/delivery, ids, and the expected audit chain. For an old send job id only, use [scripts/show_run_summary.ps1](../scripts/show_run_summary.ps1).
+
 ## Expected output (high level)
 
 | Step | What appears |
