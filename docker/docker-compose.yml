@@ -1,0 +1,15 @@
+# Local dev skeleton: add Postgres, Redis, and worker service when ready.
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:////data/local.db
+    volumes:
+      - api_data:/data
+
+volumes:
+  api_data: {}
