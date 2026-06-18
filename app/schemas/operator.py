@@ -63,11 +63,25 @@ class AuditEventResponse(BaseModel):
     tenant_id: str | None
     actor: str | None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    seq: int | None = None
+    previous_hash: str | None = None
+    event_hash: str | None = None
     created_at: datetime
 
 
 class AuditListResponse(BaseModel):
     items: list[AuditEventResponse] = Field(default_factory=list)
+
+
+class AuditChainVerificationResponse(BaseModel):
+    """Tamper-evidence verification status for the global audit chain."""
+
+    status: str  # "verified" | "failed" | "empty"
+    ok: bool
+    verified_count: int
+    total_count: int
+    broken_at_seq: int | None = None
+    reason: str | None = None
 
 
 def audit_event_to_response(row: AuditEvent) -> AuditEventResponse:
@@ -82,5 +96,8 @@ def audit_event_to_response(row: AuditEvent) -> AuditEventResponse:
         tenant_id=row.tenant_id,
         actor=row.actor,
         metadata=meta if isinstance(meta, dict) else {},
+        seq=row.seq,
+        previous_hash=row.previous_hash,
+        event_hash=row.event_hash,
         created_at=row.created_at,
     )
