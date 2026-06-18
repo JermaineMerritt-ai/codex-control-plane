@@ -94,7 +94,7 @@ def test_tenant_isolation_blocks_even_when_role_has_permission():
             json={"actor": "admin"},
             headers={"X-Api-Key": "admin-A"},
         )
-    assert r.status_code == 400
+    assert r.status_code == 404  # cross-tenant resource is not found (non-leaking)
     assert r.json()["detail"] == "approval_not_found"
 
 
@@ -152,6 +152,38 @@ def test_retry_requires_execute_permission_before_lookup():
         # Viewer lacks execute_approved_action -> denied before any job lookup.
         r = client.post("/jobs/does-not-exist/retry", headers={"X-Api-Key": "viewer-A"})
     assert r.status_code == 403
+
+
+def test_require_rbac_for_operator_fails_closed(monkeypatch):
+    """With the hardening flag on, the no-key operator path carries NO
+    permissions — protected actions are denied (true fail-closed)."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("REQUIRE_RBAC_FOR_OPERATOR", "true")
+    get_settings.cache_clear()
+    try:
+        with _factory()() as s:
+            p = rbac_service.resolve_principal(s, api_key=None)
+            assert p.is_operator is False
+            assert p.permissions == frozenset()
+            assert not p.has("approve_action")
+            assert not p.has("view_audit")
+    finally:
+        get_settings.cache_clear()
+
+
+def test_seed_rbac_is_idempotent():
+    from db.models import Permission, Role, RolePermission
+
+    with _factory()() as s:
+        rbac_service.seed_rbac(s)
+        rbac_service.seed_rbac(s)  # second call must not duplicate
+        perms = s.query(Permission).count()
+        roles = s.query(Role).count()
+        links = s.query(RolePermission).count()
+    assert perms == 9
+    assert roles == 6
+    assert links == sum(len(v) for v in rbac_service.ROLE_PERMISSIONS.values())
 
 
 def test_resolve_principal_matrix_and_operator_bypass():

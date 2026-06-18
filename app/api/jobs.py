@@ -35,7 +35,9 @@ def retry_job(
     try:
         retry_failed_job(db, job_id, tenant_id=principal.tenant_id)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # Cross-tenant / missing job => 404 (non-leaking); other failures => 400.
+        status = 404 if str(exc) == "job_not_found" else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
     job = get_job_by_id(db, job_id, tenant_id=principal.tenant_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job_not_found")

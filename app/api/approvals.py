@@ -62,7 +62,10 @@ def approve_request(
             db, approval_id, actor=body.actor, note=body.note, tenant_id=principal.tenant_id
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # Cross-tenant / missing resource => 404 (consistent with read routes,
+        # non-leaking); other validation failures => 400.
+        status = 404 if str(exc) == "approval_not_found" else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
 
     execution_job_id: str | None = None
     if approval_service.should_enqueue_email_send_after_approval(row):
@@ -88,5 +91,6 @@ def reject_request(
             db, approval_id, actor=body.actor, reason=body.reason, tenant_id=principal.tenant_id
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        status = 404 if str(exc) == "approval_not_found" else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
     return _enrich_approval_detail(db, row)
