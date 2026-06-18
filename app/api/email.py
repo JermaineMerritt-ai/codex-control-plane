@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.deps import get_db
+from app.deps import get_current_tenant_id, get_db
 from app.schemas.email_operator import (
     EmailDeliveryDetailResponse,
     EmailDeliveryListResponse,
@@ -20,24 +20,33 @@ router = APIRouter(prefix="/email", tags=["email"])
 @router.get("/deliveries", response_model=EmailDeliveryListResponse)
 def list_deliveries(
     db: Session = Depends(get_db),
+    tenant_id: str | None = Depends(get_current_tenant_id),
     status: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ):
-    rows = email_persistence.list_deliveries(db, status=status, limit=limit)
+    rows = email_persistence.list_deliveries(db, status=status, tenant_id=tenant_id, limit=limit)
     return EmailDeliveryListResponse(items=[delivery_to_detail(r) for r in rows])
 
 
 @router.get("/deliveries/by-approval/{approval_id}", response_model=EmailDeliveryDetailResponse)
-def get_delivery_by_approval(approval_id: str, db: Session = Depends(get_db)):
-    row = email_persistence.get_delivery_by_approval_id(db, approval_id)
+def get_delivery_by_approval(
+    approval_id: str,
+    db: Session = Depends(get_db),
+    tenant_id: str | None = Depends(get_current_tenant_id),
+):
+    row = email_persistence.get_delivery_by_approval_id(db, approval_id, tenant_id=tenant_id)
     if row is None:
         raise HTTPException(status_code=404, detail="delivery_not_found")
     return delivery_to_detail(row)
 
 
 @router.get("/deliveries/by-job/{job_id}", response_model=EmailDeliveryDetailResponse)
-def get_delivery_by_job(job_id: str, db: Session = Depends(get_db)):
-    row = email_persistence.get_delivery_by_execution_job_id(db, job_id)
+def get_delivery_by_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    tenant_id: str | None = Depends(get_current_tenant_id),
+):
+    row = email_persistence.get_delivery_by_execution_job_id(db, job_id, tenant_id=tenant_id)
     if row is None:
         raise HTTPException(status_code=404, detail="delivery_not_found")
     return delivery_to_detail(row)
@@ -47,8 +56,9 @@ def get_delivery_by_job(job_id: str, db: Session = Depends(get_db)):
 def thread_summary(
     external_thread_id: str,
     db: Session = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    tenant_id: str | None = Depends(get_current_tenant_id),
 ):
+    # Tenant comes from the caller's credential, not a client-supplied param.
     snap = email_persistence.get_thread_summary(
         db, tenant_id=tenant_id, external_thread_id=external_thread_id
     )

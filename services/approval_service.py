@@ -79,8 +79,9 @@ def approve(
     *,
     actor: str,
     note: str | None = None,
+    tenant_id: str | None = None,
 ) -> ApprovalRequest:
-    row = session.get(ApprovalRequest, approval_id)
+    row = get_request(session, approval_id, tenant_id=tenant_id)
     if row is None:
         raise ValueError("approval_not_found")
     if row.status != ApprovalStatus.pending.value:
@@ -113,8 +114,9 @@ def reject(
     *,
     actor: str,
     reason: str,
+    tenant_id: str | None = None,
 ) -> ApprovalRequest:
-    row = session.get(ApprovalRequest, approval_id)
+    row = get_request(session, approval_id, tenant_id=tenant_id)
     if row is None:
         raise ValueError("approval_not_found")
     if row.status != ApprovalStatus.pending.value:
@@ -139,12 +141,29 @@ def reject(
     return row
 
 
-def get_request(session: Session, approval_id: str) -> ApprovalRequest | None:
-    return session.get(ApprovalRequest, approval_id)
+def get_request(
+    session: Session, approval_id: str, *, tenant_id: str | None = None
+) -> ApprovalRequest | None:
+    """Fetch an approval by id. When ``tenant_id`` is set, returns it only if it
+    belongs to that tenant (cross-tenant access yields ``None``)."""
+    row = session.get(ApprovalRequest, approval_id)
+    if row is None:
+        return None
+    if tenant_id is not None and row.tenant_id != tenant_id:
+        return None
+    return row
 
 
-def list_approvals(session: Session, *, status: str | None = None, limit: int = 50) -> list[ApprovalRequest]:
+def list_approvals(
+    session: Session,
+    *,
+    status: str | None = None,
+    tenant_id: str | None = None,
+    limit: int = 50,
+) -> list[ApprovalRequest]:
     stmt = select(ApprovalRequest).order_by(ApprovalRequest.created_at.desc()).limit(min(limit, 200))
+    if tenant_id is not None:
+        stmt = stmt.where(ApprovalRequest.tenant_id == tenant_id)
     if status:
         stmt = stmt.where(ApprovalRequest.status == status)
     return list(session.execute(stmt).scalars().all())
