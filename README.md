@@ -77,6 +77,24 @@ A shell variant lives at [scripts/demo_gmail_flow.sh](scripts/demo_gmail_flow.sh
 
 ---
 
+## Phase 1: Enterprise Governance Foundation
+
+Layered around the governed execution pattern (without changing the Gmail flow):
+a tamper-evident audit hash chain, multi-tenant isolation, identity + RBAC, a
+regulation/control mapping catalog, an evidence graph, and exportable **evidence
+packets** (JSON + Markdown). These **support evidence collection, control
+mapping, audit readiness, and governance workflows** — they do not certify,
+guarantee, or determine compliance, and are not a regulatory authorization.
+
+- Overview, security model, limitations, and Phase 2 roadmap: [docs/ENTERPRISE_GOVERNANCE_FOUNDATION.md](docs/ENTERPRISE_GOVERNANCE_FOUNDATION.md)
+- Buyer-facing audit packet demo: [docs/BUYER_AUDIT_PACKET_DEMO.md](docs/BUYER_AUDIT_PACKET_DEMO.md) — run `python -m scripts.demo_evidence_packet` (no server, no Gmail)
+- Phase 1 completion summary: [docs/PHASE_1_COMPLETION_SUMMARY.md](docs/PHASE_1_COMPLETION_SUMMARY.md)
+
+This is a pattern and reference implementation, **pilot-ready for evaluation**,
+not a finished or production-certified product.
+
+---
+
 ## What is intentionally out of scope (for now)
 
 - A full web “dashboard” product UI (the API includes FastAPI `/docs` only).  
