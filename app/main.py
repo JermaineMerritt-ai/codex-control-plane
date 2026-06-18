@@ -11,6 +11,7 @@ from app.api.approvals import router as approvals_router
 from app.api.audit import router as audit_router
 from app.api.controls import router as controls_router
 from app.api.email import router as email_router
+from app.api.evidence import router as evidence_router
 from app.api.jobs import router as jobs_router
 from app.middleware.operator_auth import OperatorAuthMiddleware
 from app.deps import get_current_tenant_id, get_db
@@ -52,6 +53,7 @@ app.include_router(approvals_router)
 app.include_router(audit_router)
 app.include_router(email_router)
 app.include_router(controls_router)
+app.include_router(evidence_router)
 
 
 @app.get("/health")
