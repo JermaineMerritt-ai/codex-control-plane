@@ -8,11 +8,13 @@ writes are unaffected).
 
 from __future__ import annotations
 
-from sqlalchemy import text
+from concurrent.futures import ThreadPoolExecutor
+
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from db.models import AuditEvent
-from db.session import get_engine
+from db.session import get_database_url, get_engine
 from services.audit_service import (
     GENESIS_HASH,
     AuditAction,
@@ -134,6 +136,53 @@ def test_forged_event_with_recomputed_hash_still_breaks_chain():
         # seq 2 verifies against itself now, but seq 3's link is stale.
         assert result.reason == "broken_link"
         assert result.broken_at_seq == 3
+
+
+def test_concurrent_writers_do_not_fork_the_chain():
+    """Many threads writing at once must all succeed, produce unique + contiguous
+    seqs, and leave a chain that verifies — proving the UNIQUE(seq) + retry fix
+    closes the fork race."""
+    n_threads = 8
+    events_per_thread = 6
+    total = n_threads * events_per_thread
+
+    # Shared engine across threads, pointed at the same test DB the conftest
+    # created. `timeout` sets SQLite's busy_timeout so writes serialize instead
+    # of erroring, isolating the test to the UNIQUE-constraint retry path.
+    engine = create_engine(
+        get_database_url(),
+        future=True,
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+    factory = sessionmaker(bind=engine, future=True)
+
+    def worker(start: int) -> None:
+        for i in range(events_per_thread):
+            with factory() as session:
+                record(
+                    session,
+                    action=AuditAction.APPROVAL_CREATED,
+                    resource_type="approval",
+                    resource_id=f"appr-{start}-{i}",
+                    actor="op",
+                    metadata={"start": start, "i": i},
+                )
+
+    with ThreadPoolExecutor(max_workers=n_threads) as pool:
+        futures = [pool.submit(worker, t) for t in range(n_threads)]
+        for future in futures:
+            future.result()  # re-raises any worker exception
+
+    with factory() as session:
+        seqs = [r.seq for r in session.query(AuditEvent).order_by(AuditEvent.seq).all()]
+        # All writers succeeded.
+        assert len(seqs) == total
+        # Unique and contiguous: no fork, no gap, no duplicate.
+        assert seqs == list(range(1, total + 1))
+        # Chain still verifies end to end.
+        assert verify_chain(session).status == "verified"
+
+    engine.dispose()
 
 
 def test_record_backward_compatible_minimal_args():

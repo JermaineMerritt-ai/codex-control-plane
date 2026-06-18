@@ -15,17 +15,25 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from db.models import AuditEvent
 
 # Root of the chain. The first real event's `previous_hash` is GENESIS.
 GENESIS_HASH = "0" * 64
+
+# Concurrent writers compute `seq` from the current chain head; the UNIQUE
+# constraint on `audit_events.seq` makes a racing duplicate fail at commit. The
+# loser rolls back, re-reads the (now advanced) head, and retries. The bound is
+# generous relative to realistic writer concurrency in the governed pipeline.
+_MAX_RECORD_ATTEMPTS = 50
 
 
 class AuditAction:
@@ -148,35 +156,55 @@ def record(
     Backward compatible: existing callers pass action/resource_type/resource_id
     (+ optional tenant_id/actor/metadata). The descriptive governance fields are
     optional and, when supplied, are bound into the event hash.
+
+    Concurrency-safe: the head read and the insert are not atomic, so two writers
+    can compute the same `seq`. The UNIQUE constraint rejects the duplicate at
+    commit; this loops, re-reading the advanced head, until the append succeeds.
     """
-    head = _chain_head(session)
-    previous_hash = head.event_hash if head is not None else GENESIS_HASH
-    next_seq = (head.seq + 1) if (head is not None and head.seq is not None) else 1
+    metadata_json = json.dumps(metadata, sort_keys=True) if metadata else None
+    last_error: Exception | None = None
 
-    row = AuditEvent(
-        action=action,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        tenant_id=tenant_id,
-        actor=actor,
-        metadata_json=json.dumps(metadata, sort_keys=True) if metadata else None,
-        actor_user_id=actor_user_id,
-        actor_type=actor_type,
-        action_type=action_type,
-        policy_version=policy_version,
-        decision=decision,
-        reason=reason,
-        seq=next_seq,
-        previous_hash=previous_hash,
-        # Set explicitly (UTC) so the value used in the hash is the value stored.
-        created_at=datetime.now(timezone.utc),
-    )
-    row.event_hash = compute_event_hash(row, previous_hash)
+    for attempt in range(_MAX_RECORD_ATTEMPTS):
+        head = _chain_head(session)
+        previous_hash = head.event_hash if head is not None else GENESIS_HASH
+        next_seq = (head.seq + 1) if (head is not None and head.seq is not None) else 1
 
-    session.add(row)
-    session.commit()
-    session.refresh(row)
-    return row
+        row = AuditEvent(
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            tenant_id=tenant_id,
+            actor=actor,
+            metadata_json=metadata_json,
+            actor_user_id=actor_user_id,
+            actor_type=actor_type,
+            action_type=action_type,
+            policy_version=policy_version,
+            decision=decision,
+            reason=reason,
+            seq=next_seq,
+            previous_hash=previous_hash,
+            # Set explicitly (UTC) so the value used in the hash is the value stored.
+            created_at=datetime.now(timezone.utc),
+        )
+        row.event_hash = compute_event_hash(row, previous_hash)
+
+        session.add(row)
+        try:
+            session.commit()
+        except (IntegrityError, OperationalError) as exc:
+            # Lost the race for this seq (or the DB was briefly locked).
+            # Roll back, let the head advance, and retry with a fresh seq.
+            session.rollback()
+            last_error = exc
+            time.sleep(0.005 * (attempt + 1))
+            continue
+        session.refresh(row)
+        return row
+
+    raise RuntimeError(
+        f"audit record failed after {_MAX_RECORD_ATTEMPTS} attempts"
+    ) from last_error
 
 
 @dataclass(frozen=True)

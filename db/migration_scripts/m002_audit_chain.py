@@ -42,3 +42,13 @@ def _apply_sqlite_column_adds(engine: Engine) -> None:
                     conn.execute(
                         text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
                     )
+        # UNIQUE index on seq prevents two concurrent writers from forking the
+        # chain at the same position. NULLs are distinct, so legacy rows (seq
+        # NULL after the column add) do not collide.
+        if "audit_events" in existing_tables:
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_audit_events_seq "
+                    "ON audit_events (seq)"
+                )
+            )
