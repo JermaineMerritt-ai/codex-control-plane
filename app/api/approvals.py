@@ -5,7 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.deps import get_current_tenant_id, get_db
+from app.deps import get_current_tenant_id, get_db, require_permission
+from services.rbac_service import Principal
 from app.schemas.approvals import (
     ApprovalDecisionResponse,
     ApprovalDetailResponse,
@@ -54,14 +55,17 @@ def approve_request(
     approval_id: str,
     body: ApproveRequestBody,
     db: Session = Depends(get_db),
-    tenant_id: str | None = Depends(get_current_tenant_id),
+    principal: Principal = Depends(require_permission("approve_action")),
 ):
     try:
         row = approval_service.approve(
-            db, approval_id, actor=body.actor, note=body.note, tenant_id=tenant_id
+            db, approval_id, actor=body.actor, note=body.note, tenant_id=principal.tenant_id
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # Cross-tenant / missing resource => 404 (consistent with read routes,
+        # non-leaking); other validation failures => 400.
+        status = 404 if str(exc) == "approval_not_found" else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
 
     execution_job_id: str | None = None
     if approval_service.should_enqueue_email_send_after_approval(row):
@@ -80,12 +84,13 @@ def reject_request(
     approval_id: str,
     body: RejectRequestBody,
     db: Session = Depends(get_db),
-    tenant_id: str | None = Depends(get_current_tenant_id),
+    principal: Principal = Depends(require_permission("reject_action")),
 ):
     try:
         row = approval_service.reject(
-            db, approval_id, actor=body.actor, reason=body.reason, tenant_id=tenant_id
+            db, approval_id, actor=body.actor, reason=body.reason, tenant_id=principal.tenant_id
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        status = 404 if str(exc) == "approval_not_found" else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
     return _enrich_approval_detail(db, row)

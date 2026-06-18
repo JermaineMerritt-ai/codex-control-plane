@@ -23,6 +23,14 @@ class Settings(BaseSettings):
         default=None,
         description="If set, clients must send X-Operator-Key for operator routes.",
     )
+    require_rbac_for_operator: bool = Field(
+        default=False,
+        description=(
+            "Future hardening. When True, the no-API-key operator/system path is "
+            "NOT a full-access bypass and protected actions require RBAC. Default "
+            "False in PR 4 to preserve the local demo and worker."
+        ),
+    )
 
     @model_validator(mode="after")
     def live_gmail_requires_credentials_file(self) -> Settings:

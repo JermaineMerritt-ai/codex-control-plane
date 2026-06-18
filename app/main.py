@@ -27,6 +27,11 @@ async def lifespan(app: FastAPI):
     engine = get_engine()
     init_db(engine)
     app.state.session_factory = get_session_factory(engine)
+    # Seed RBAC roles/permissions (idempotent) so the running app can enforce.
+    from services.rbac_service import seed_rbac
+
+    with app.state.session_factory() as session:
+        seed_rbac(session)
     yield
     engine.dispose()
 
