@@ -58,14 +58,16 @@ def chat(
 ):
     """Accept chat input, persist a durable job, return immediately (no inline orchestration).
 
-    A tenant-bound API key determines the job's tenant (clients cannot spoof it
-    via the request body). The operator/dev path (no key) falls back to the body
-    value, preserving the existing single-tenant demo.
+    The job's tenant is bound to the caller's credential (a valid API key).
+    `/chat` is a public intake, so the client-supplied `body.tenant_id` is NOT
+    trusted for tenant assignment — otherwise an unauthenticated caller could
+    inject a job into another tenant. With no API key the job is unscoped
+    (`tenant_id=None`), preserving the single-tenant demo.
     """
     job = create_job(
         db,
         job_type=CHAT_ORCHESTRATE,
-        tenant_id=tenant_id if tenant_id is not None else body.tenant_id,
+        tenant_id=tenant_id,
         payload={
             "session_id": body.session_id,
             "message": body.message,

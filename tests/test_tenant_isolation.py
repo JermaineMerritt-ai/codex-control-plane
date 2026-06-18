@@ -8,8 +8,10 @@ and that the global audit hash chain still verifies after tenant-scoped reads.
 from __future__ import annotations
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
+from app.main import app
 from db.models import EmailDeliveryRecord, Tenant
 from db.session import get_engine
 from services import (
@@ -151,6 +153,39 @@ def test_global_audit_chain_still_verifies_after_tenant_scoped_ops():
         audit_service.list_audit_events(s, tenant_id=TENANT_A)
         audit_service.verify_tenant_events(s, TENANT_B)
         assert audit_service.verify_chain(s).status == "verified"
+
+
+def test_chat_does_not_trust_body_tenant_id():
+    """Public /chat must not let an unauthenticated caller stamp a job with an
+    arbitrary tenant via the request body."""
+    with TestClient(app) as client:
+        resp = client.post(
+            "/chat",
+            json={"tenant_id": TENANT_B, "session_id": "s1", "message": "hi"},
+        )
+        assert resp.status_code == 200
+        job_id = resp.json()["job_id"]
+    with _factory()() as s:
+        job = job_service.get_job_by_id(s, job_id)  # unscoped read
+        assert job is not None
+        assert job.tenant_id is None  # body "tenant-b" ignored, not spoofable
+
+
+def test_chat_binds_job_to_api_key_tenant_not_body():
+    with _factory()() as s:
+        _make_tenant(s, TENANT_A)
+        tenant_service.provision_api_key(s, tenant_id=TENANT_A, name="k", raw_key="key-A")
+    with TestClient(app) as client:
+        resp = client.post(
+            "/chat",
+            json={"tenant_id": TENANT_B, "session_id": "s2", "message": "hi"},
+            headers={"X-Api-Key": "key-A"},
+        )
+        job_id = resp.json()["job_id"]
+    with _factory()() as s:
+        job = job_service.get_job_by_id(s, job_id)
+        assert job is not None
+        assert job.tenant_id == TENANT_A  # credential wins; body tenant ignored
 
 
 def test_api_key_resolves_to_bound_tenant_and_rejects_unknown():
