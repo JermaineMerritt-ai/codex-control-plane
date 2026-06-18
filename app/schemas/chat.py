@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
+    # Deprecated/ignored for tenant binding: the tenant is derived from the
+    # caller's API key, never from this field (prevents cross-tenant spoofing on
+    # the public /chat intake). Retained only for request back-compat.
     tenant_id: str | None = None
     session_id: str = Field(..., min_length=1)
     message: str = Field(..., min_length=1)

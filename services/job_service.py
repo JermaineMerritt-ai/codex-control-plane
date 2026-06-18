@@ -43,8 +43,16 @@ def mark_job_failed(session: Session, job: Job, message: str) -> None:
     session.commit()
 
 
-def get_job_by_id(session: Session, job_id: str) -> Job | None:
-    return session.get(Job, job_id)
+def get_job_by_id(session: Session, job_id: str, *, tenant_id: str | None = None) -> Job | None:
+    """Fetch a job by id. When ``tenant_id`` is set, returns the job only if it
+    belongs to that tenant (cross-tenant access yields ``None``, never a leak).
+    ``tenant_id=None`` is the unscoped operator/system path (back-compatible)."""
+    job = session.get(Job, job_id)
+    if job is None:
+        return None
+    if tenant_id is not None and job.tenant_id != tenant_id:
+        return None
+    return job
 
 
 def get_job_by_idempotency_key(session: Session, key: str) -> Job | None:
@@ -77,9 +85,12 @@ def list_jobs(
     *,
     status: str | None = None,
     job_type: str | None = None,
+    tenant_id: str | None = None,
     limit: int = 50,
 ) -> list[Job]:
     stmt = select(Job).order_by(Job.created_at.desc()).limit(min(limit, 200))
+    if tenant_id is not None:
+        stmt = stmt.where(Job.tenant_id == tenant_id)
     if status:
         stmt = stmt.where(Job.status == status)
     if job_type:
@@ -111,9 +122,11 @@ def _assert_email_send_retry_allowed(session: Session, job: Job) -> None:
         raise ValueError("retry_blocked_delivery_sent")
 
 
-def retry_failed_job(session: Session, job_id: str) -> Job:
-    """Re-queue a failed `email.send_approved` job (idempotent send still enforced on approval row)."""
-    job = get_job_by_id(session, job_id)
+def retry_failed_job(session: Session, job_id: str, *, tenant_id: str | None = None) -> Job:
+    """Re-queue a failed `email.send_approved` job (idempotent send still enforced on approval row).
+
+    Scoped: a tenant cannot retry another tenant's job (raises job_not_found)."""
+    job = get_job_by_id(session, job_id, tenant_id=tenant_id)
     if job is None:
         raise ValueError("job_not_found")
     if job.type != EMAIL_SEND_APPROVED:

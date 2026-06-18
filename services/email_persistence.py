@@ -122,22 +122,35 @@ def list_deliveries(
     session: Session,
     *,
     status: str | None = None,
+    tenant_id: str | None = None,
     limit: int = 50,
 ) -> list[EmailDeliveryRecord]:
     stmt = select(EmailDeliveryRecord).order_by(EmailDeliveryRecord.updated_at.desc()).limit(min(limit, 200))
+    if tenant_id is not None:
+        stmt = stmt.where(EmailDeliveryRecord.tenant_id == tenant_id)
     if status:
         stmt = stmt.where(EmailDeliveryRecord.status == status)
     return list(session.execute(stmt).scalars().all())
 
 
-def get_delivery_by_approval_id(session: Session, approval_id: str) -> EmailDeliveryRecord | None:
+def get_delivery_by_approval_id(
+    session: Session, approval_id: str, *, tenant_id: str | None = None
+) -> EmailDeliveryRecord | None:
     stmt = select(EmailDeliveryRecord).where(EmailDeliveryRecord.approval_id == approval_id).limit(1)
-    return session.execute(stmt).scalar_one_or_none()
+    row = session.execute(stmt).scalar_one_or_none()
+    if row is not None and tenant_id is not None and row.tenant_id != tenant_id:
+        return None
+    return row
 
 
-def get_delivery_by_execution_job_id(session: Session, job_id: str) -> EmailDeliveryRecord | None:
+def get_delivery_by_execution_job_id(
+    session: Session, job_id: str, *, tenant_id: str | None = None
+) -> EmailDeliveryRecord | None:
     stmt = select(EmailDeliveryRecord).where(EmailDeliveryRecord.execution_job_id == job_id).limit(1)
-    return session.execute(stmt).scalar_one_or_none()
+    row = session.execute(stmt).scalar_one_or_none()
+    if row is not None and tenant_id is not None and row.tenant_id != tenant_id:
+        return None
+    return row
 
 
 def get_thread_summary(session: Session, *, tenant_id: str | None, external_thread_id: str) -> dict[str, Any]:

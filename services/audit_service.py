@@ -269,9 +269,12 @@ def list_audit_events(
     *,
     resource_type: str | None = None,
     resource_id: str | None = None,
+    tenant_id: str | None = None,
     limit: int = 100,
 ) -> list[AuditEvent]:
     stmt = select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(min(limit, 500))
+    if tenant_id is not None:
+        stmt = stmt.where(AuditEvent.tenant_id == tenant_id)
     if resource_type:
         stmt = stmt.where(AuditEvent.resource_type == resource_type)
     if resource_id:
@@ -279,10 +282,51 @@ def list_audit_events(
     return list(session.execute(stmt).scalars().all())
 
 
-def list_for_resource(session: Session, *, resource_type: str, resource_id: str) -> list[AuditEvent]:
+def list_for_resource(
+    session: Session, *, resource_type: str, resource_id: str, tenant_id: str | None = None
+) -> list[AuditEvent]:
     stmt = (
         select(AuditEvent)
         .where(AuditEvent.resource_type == resource_type, AuditEvent.resource_id == resource_id)
         .order_by(AuditEvent.created_at)
     )
+    if tenant_id is not None:
+        stmt = stmt.where(AuditEvent.tenant_id == tenant_id)
     return list(session.execute(stmt).scalars().all())
+
+
+def verify_tenant_events(session: Session, tenant_id: str) -> ChainVerificationResult:
+    """Tenant-scoped integrity check: recompute the self-hash of each of this
+    tenant's audit events.
+
+    This proves none of *this tenant's* events were individually altered. It is
+    intentionally **not** a full-chain link proof: the hash chain is global
+    (events from all tenants are interleaved), so cross-event link verification
+    remains the job of ``verify_chain``. Per-tenant chain partitioning, if ever
+    required, is a future change. A caller only ever sees its own resolved
+    tenant here, so it cannot inspect another tenant's events.
+    """
+    stmt = (
+        select(AuditEvent)
+        .where(AuditEvent.tenant_id == tenant_id, AuditEvent.event_hash.is_not(None))
+        .order_by(AuditEvent.seq)
+    )
+    rows = list(session.execute(stmt).scalars().all())
+    if not rows:
+        return ChainVerificationResult(status="empty", verified_count=0, total_count=0)
+
+    for index, row in enumerate(rows):
+        if compute_event_hash(row, row.previous_hash) != row.event_hash:
+            return ChainVerificationResult(
+                status="failed",
+                verified_count=index,
+                total_count=len(rows),
+                broken_at_seq=row.seq,
+                reason="hash_mismatch",
+            )
+
+    return ChainVerificationResult(
+        status="verified",
+        verified_count=len(rows),
+        total_count=len(rows),
+    )

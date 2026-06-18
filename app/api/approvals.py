@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.deps import get_db
+from app.deps import get_current_tenant_id, get_db
 from app.schemas.approvals import (
     ApprovalDecisionResponse,
     ApprovalDetailResponse,
@@ -23,10 +23,11 @@ router = APIRouter(prefix="/approvals", tags=["approvals"])
 @router.get("", response_model=ApprovalListResponse)
 def list_approvals_api(
     db: Session = Depends(get_db),
+    tenant_id: str | None = Depends(get_current_tenant_id),
     status: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ):
-    rows = approval_service.list_approvals(db, status=status, limit=limit)
+    rows = approval_service.list_approvals(db, status=status, tenant_id=tenant_id, limit=limit)
     return ApprovalListResponse(items=[approval_to_summary(r) for r in rows])
 
 
@@ -37,17 +38,28 @@ def _enrich_approval_detail(db: Session, row) -> ApprovalDetailResponse:
 
 
 @router.get("/{approval_id}", response_model=ApprovalDetailResponse)
-def get_approval(approval_id: str, db: Session = Depends(get_db)):
-    row = approval_service.get_request(db, approval_id)
+def get_approval(
+    approval_id: str,
+    db: Session = Depends(get_db),
+    tenant_id: str | None = Depends(get_current_tenant_id),
+):
+    row = approval_service.get_request(db, approval_id, tenant_id=tenant_id)
     if row is None:
         raise HTTPException(status_code=404, detail="approval_not_found")
     return _enrich_approval_detail(db, row)
 
 
 @router.post("/{approval_id}/approve", response_model=ApprovalDecisionResponse)
-def approve_request(approval_id: str, body: ApproveRequestBody, db: Session = Depends(get_db)):
+def approve_request(
+    approval_id: str,
+    body: ApproveRequestBody,
+    db: Session = Depends(get_db),
+    tenant_id: str | None = Depends(get_current_tenant_id),
+):
     try:
-        row = approval_service.approve(db, approval_id, actor=body.actor, note=body.note)
+        row = approval_service.approve(
+            db, approval_id, actor=body.actor, note=body.note, tenant_id=tenant_id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -64,9 +76,16 @@ def approve_request(approval_id: str, body: ApproveRequestBody, db: Session = De
 
 
 @router.post("/{approval_id}/reject", response_model=ApprovalDetailResponse)
-def reject_request(approval_id: str, body: RejectRequestBody, db: Session = Depends(get_db)):
+def reject_request(
+    approval_id: str,
+    body: RejectRequestBody,
+    db: Session = Depends(get_db),
+    tenant_id: str | None = Depends(get_current_tenant_id),
+):
     try:
-        row = approval_service.reject(db, approval_id, actor=body.actor, reason=body.reason)
+        row = approval_service.reject(
+            db, approval_id, actor=body.actor, reason=body.reason, tenant_id=tenant_id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _enrich_approval_detail(db, row)

@@ -12,7 +12,7 @@ from app.api.audit import router as audit_router
 from app.api.email import router as email_router
 from app.api.jobs import router as jobs_router
 from app.middleware.operator_auth import OperatorAuthMiddleware
-from app.deps import get_db
+from app.deps import get_current_tenant_id, get_db
 from app.schemas.chat import ChatRequest, ChatResponse
 from db.session import get_engine, get_session_factory, init_db
 from services.job_service import create_job
@@ -51,12 +51,23 @@ def health():
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(body: ChatRequest, db: Session = Depends(get_db)):
-    """Accept chat input, persist a durable job, return immediately (no inline orchestration)."""
+def chat(
+    body: ChatRequest,
+    db: Session = Depends(get_db),
+    tenant_id: str | None = Depends(get_current_tenant_id),
+):
+    """Accept chat input, persist a durable job, return immediately (no inline orchestration).
+
+    The job's tenant is bound to the caller's credential (a valid API key).
+    `/chat` is a public intake, so the client-supplied `body.tenant_id` is NOT
+    trusted for tenant assignment — otherwise an unauthenticated caller could
+    inject a job into another tenant. With no API key the job is unscoped
+    (`tenant_id=None`), preserving the single-tenant demo.
+    """
     job = create_job(
         db,
         job_type=CHAT_ORCHESTRATE,
-        tenant_id=body.tenant_id,
+        tenant_id=tenant_id,
         payload={
             "session_id": body.session_id,
             "message": body.message,
