@@ -6,7 +6,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 DEFAULT_TENANT_ID = "00000000-0000-4000-8000-000000000001"
@@ -169,6 +169,13 @@ class AuditEvent(Base):
     decision: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Tamper-evident hash chain (PR 2). `seq` orders the global chain; `event_hash`
+    # commits to the immutable core fields plus `previous_hash`. Nullable so that
+    # any pre-chain (legacy) rows remain valid and are skipped by verification.
+    # UNIQUE so two concurrent writers cannot fork the chain at the same position:
+    # the loser of the race hits an IntegrityError and retries (see audit_service).
+    # NULLs are distinct in both SQLite and Postgres, so legacy NULL rows are fine.
+    seq: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True, index=True)
     previous_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     event_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
