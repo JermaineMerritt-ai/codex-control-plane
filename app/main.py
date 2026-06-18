@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.approvals import router as approvals_router
 from app.api.audit import router as audit_router
+from app.api.controls import router as controls_router
 from app.api.email import router as email_router
 from app.api.jobs import router as jobs_router
 from app.middleware.operator_auth import OperatorAuthMiddleware
@@ -27,11 +28,13 @@ async def lifespan(app: FastAPI):
     engine = get_engine()
     init_db(engine)
     app.state.session_factory = get_session_factory(engine)
-    # Seed RBAC roles/permissions (idempotent) so the running app can enforce.
+    # Seed RBAC + control catalog (both idempotent) so the running app is usable.
+    from services.control_catalog import seed_control_catalog
     from services.rbac_service import seed_rbac
 
     with app.state.session_factory() as session:
         seed_rbac(session)
+        seed_control_catalog(session)
     yield
     engine.dispose()
 
@@ -48,6 +51,7 @@ app.include_router(jobs_router)
 app.include_router(approvals_router)
 app.include_router(audit_router)
 app.include_router(email_router)
+app.include_router(controls_router)
 
 
 @app.get("/health")
