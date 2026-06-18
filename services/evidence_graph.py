@@ -165,16 +165,33 @@ def list_workflows(
     return list(session.execute(stmt).scalars().all())
 
 
+def get_workflow(session: Session, workflow_id: str, *, tenant_id: str | None = None) -> Workflow | None:
+    return _scoped(session.get(Workflow, workflow_id), tenant_id)
+
+
 def get_governed_action(
     session: Session, governed_action_id: str, *, tenant_id: str | None = None
 ) -> GovernedAction | None:
     return _scoped(session.get(GovernedAction, governed_action_id), tenant_id)
 
 
-def list_governed_actions(session: Session, *, tenant_id: str | None = None) -> list[GovernedAction]:
+def list_governed_actions(
+    session: Session,
+    *,
+    tenant_id: str | None = None,
+    workflow_id: str | None = None,
+    start_at: Any = None,
+    end_at: Any = None,
+) -> list[GovernedAction]:
     stmt = select(GovernedAction).order_by(GovernedAction.created_at.desc())
     if tenant_id is not None:
         stmt = stmt.where(GovernedAction.tenant_id == tenant_id)
+    if workflow_id is not None:
+        stmt = stmt.where(GovernedAction.workflow_id == workflow_id)
+    if start_at is not None:
+        stmt = stmt.where(GovernedAction.created_at >= start_at)
+    if end_at is not None:
+        stmt = stmt.where(GovernedAction.created_at <= end_at)
     return list(session.execute(stmt).scalars().all())
 
 
