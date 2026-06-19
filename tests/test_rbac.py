@@ -182,7 +182,7 @@ def test_seed_rbac_is_idempotent():
         roles = s.query(Role).count()
         links = s.query(RolePermission).count()
     assert perms == 9
-    assert roles == 6
+    assert roles == len(rbac_service.ROLE_PERMISSIONS)  # 7 incl. Reviewer (Phase 2)
     assert links == sum(len(v) for v in rbac_service.ROLE_PERMISSIONS.values())
 
 
