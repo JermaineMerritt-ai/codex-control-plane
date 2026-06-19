@@ -230,7 +230,14 @@ def get_evidence_graph(
         _scoped(session.get(Job, action.execution_job_id), tenant_id) if action.execution_job_id else None
     )
 
-    resource_ids = [rid for rid in (action.approval_id, action.source_job_id, action.execution_job_id) if rid]
+    # Include the governed action's own id so workflow step events (recorded with
+    # resource_type="governed_action") surface in the graph/evidence packet, not
+    # only the approval/job-keyed events.
+    resource_ids = [
+        rid
+        for rid in (action.id, action.approval_id, action.source_job_id, action.execution_job_id)
+        if rid
+    ]
     audit_events: list[AuditEvent] = []
     if resource_ids:
         a_stmt = select(AuditEvent).where(AuditEvent.resource_id.in_(resource_ids)).order_by(AuditEvent.seq)

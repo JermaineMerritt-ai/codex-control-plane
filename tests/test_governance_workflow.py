@@ -99,6 +99,10 @@ def test_high_risk_run_requires_approval_and_records_audit_and_evidence():
         assert packet["packet_type"] == "governed_action"
         assert len(packet["governed_actions"]) == 1
         assert packet["audit_chain_verification"]["status"] == "verified"
+        # Packet must surface the workflow step audit events, not just approval ones.
+        packet_actions = {e["action"] for e in packet["audit_events"]}
+        assert any(a.startswith("governance_review.") for a in packet_actions)
+        assert "governance_review.risk_classified" in packet_actions
 
 
 def test_medium_risk_requires_approval():
