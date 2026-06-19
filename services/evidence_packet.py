@@ -52,6 +52,22 @@ def _verify(session: Session, tenant_id: str | None) -> dict[str, Any]:
     }
 
 
+_APPROVAL_STATUS_MAP = {"pending": "pending_approval", "approved": "approved", "rejected": "rejected"}
+
+
+def _effective_action_status(action: Any, approval: Any) -> str:
+    """Effective governed-action status for display.
+
+    The approval is the source of truth for the decision; the stored
+    `action.status` is set at submit time and is not mutated on the (generic,
+    Phase-1) approval transition. So when a governed action has a linked
+    approval, render the action's status from that approval's final state.
+    """
+    if approval is not None:
+        return _APPROVAL_STATUS_MAP.get(approval.status, action.status)
+    return action.status
+
+
 def _assemble(
     session: Session,
     *,
@@ -77,7 +93,11 @@ def _assemble(
     for graph in graphs:
         action = graph["governed_action"]
         governed_actions.append(
-            {"id": action.id, "action_type": action.action_type, "status": action.status}
+            {
+                "id": action.id,
+                "action_type": action.action_type,
+                "status": _effective_action_status(action, graph["approval"]),
+            }
         )
 
         if graph["approval"] is not None:

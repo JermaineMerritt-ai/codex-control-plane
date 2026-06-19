@@ -135,6 +135,37 @@ def test_approve_then_run_reports_approved():
     assert detail["approval_status"] == "approved"
 
 
+def test_packet_reflects_final_decision_not_pending():
+    """Evidence packet must render the governed action's status from the final
+    approval decision (not the stale submit-time 'pending_approval')."""
+    high = dict(
+        vendor_name="V", system_type="autonomous agent", intended_use="outreach",
+        data_sensitivity="regulated", external_exposure=True, autonomy_level="autonomous",
+    )
+    with _factory()() as s:
+        s.add(Tenant(id="A", name="A"))
+        s.commit()
+        r1 = governance_workflow.submit_vendor_governance_review(s, tenant_id="A", actor="op", **high)
+        r2 = governance_workflow.submit_vendor_governance_review(s, tenant_id="A", actor="op", **high)
+
+        # Before any decision the packet shows pending_approval.
+        pre = evidence_packet.build_action_packet(s, governed_action_id=r1["governed_action_id"], tenant_id="A")
+        assert pre["governed_actions"][0]["status"] == "pending_approval"
+
+        approval_service.approve(s, r1["approval_id"], actor="rev", tenant_id="A")
+        approval_service.reject(s, r2["approval_id"], actor="rev", reason="not approved", tenant_id="A")
+
+        p1 = evidence_packet.build_action_packet(s, governed_action_id=r1["governed_action_id"], tenant_id="A")
+        p2 = evidence_packet.build_action_packet(s, governed_action_id=r2["governed_action_id"], tenant_id="A")
+
+    assert p1["governed_actions"][0]["status"] == "approved"
+    assert p2["governed_actions"][0]["status"] == "rejected"
+    assert all(g["status"] != "pending_approval" for g in p1["governed_actions"] + p2["governed_actions"])
+    # Audit trail unchanged and still verifiable.
+    assert p1["audit_chain_verification"]["status"] == "verified"
+    assert p2["audit_chain_verification"]["status"] == "verified"
+
+
 def test_run_tenant_isolation_service_level():
     with _factory()() as s:
         s.add(Tenant(id="A", name="A"))
