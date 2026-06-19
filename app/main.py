@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.approvals import router as approvals_router
@@ -61,6 +63,15 @@ app.include_router(workflows_router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+_CONSOLE_PATH = Path(__file__).parent / "static" / "console.html"
+
+
+@app.get("/console")
+def console():
+    """Serve the minimal pilot control console (auth is via X-Api-Key in-page)."""
+    return FileResponse(_CONSOLE_PATH, media_type="text/html")
 
 
 @app.post("/chat", response_model=ChatResponse)
