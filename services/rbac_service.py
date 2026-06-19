@@ -52,6 +52,9 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
     },
     "Auditor": {P_VIEW_AUDIT, P_EXPORT_EVIDENCE},
     "Operator": {P_CREATE, P_EXECUTE, P_VIEW_AUDIT},
+    # Reviewer (Phase 2): approves/rejects governed actions; read-only on audit.
+    # Deliberately has no create permission — separation of duties from Operator.
+    "Reviewer": {P_APPROVE, P_REJECT, P_VIEW_AUDIT},
     "Viewer": {P_VIEW_AUDIT},
 }
 
