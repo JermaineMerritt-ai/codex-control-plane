@@ -49,6 +49,32 @@ def test_console_route_serves_html():
     assert "Pilot Control Console" in r.text
 
 
+def test_role_separation_for_pilot_keys():
+    """Operator can't approve; Auditor can't submit but can export; Reviewer can't submit."""
+    with _factory()() as s:
+        seed_pilot(s)
+    high = {
+        "vendor_name": "VendorX", "system_type": "autonomous agent", "intended_use": "outreach",
+        "data_sensitivity": "regulated", "external_exposure": True, "autonomy_level": "autonomous",
+    }
+    with TestClient(app) as client:
+        r = client.post("/workflows/vendor-governance-review", json=high,
+                        headers={"X-Api-Key": "pilot-operator-key"})
+        gid, approval_id = r.json()["governed_action_id"], r.json()["approval_id"]
+
+        # Operator lacks approve_action.
+        assert client.post(f"/approvals/{approval_id}/approve", json={"actor": "op"},
+                           headers={"X-Api-Key": "pilot-operator-key"}).status_code == 403
+        # Reviewer lacks create_governed_action.
+        assert client.post("/workflows/vendor-governance-review", json=high,
+                           headers={"X-Api-Key": "pilot-reviewer-key"}).status_code == 403
+        # Auditor lacks create but can export evidence.
+        assert client.post("/workflows/vendor-governance-review", json=high,
+                           headers={"X-Api-Key": "pilot-auditor-key"}).status_code == 403
+        assert client.get(f"/evidence/packets/export/{gid}?format=json",
+                          headers={"X-Api-Key": "pilot-auditor-key"}).status_code == 200
+
+
 def test_console_loop_via_seeded_keys():
     """End-to-end through the API the console calls, using seeded keys."""
     with _factory()() as s:
