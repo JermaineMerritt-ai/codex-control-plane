@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CodexDominion — Pilot Control Console</title>
+<style>
+  :root{--bg:#0b1220;--card:#121a2b;--line:#22304a;--ink:#e6edf7;--mut:#93a4c0;--brand:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  header{background:#0a1020;border-bottom:1px solid var(--line);padding:14px 20px;display:flex;gap:12px;align-items:center;position:sticky;top:0;z-index:5}
+  header b{font-size:15px}
+  header .tag{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.12em}
+  .key{margin-left:auto;display:flex;gap:8px;align-items:center}
+  input,select,textarea{background:#0d1526;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:7px 9px;font:inherit}
+  input::placeholder{color:#5c6b86}
+  main{max-width:1000px;margin:18px auto;padding:0 16px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h2{margin:0 0 10px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--brand)}
+  .full{grid-column:1 / -1}
+  label{display:block;font-size:12px;color:var(--mut);margin:8px 0 3px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row > div{flex:1;min-width:120px}
+  button{background:var(--brand);color:#fff;border:0;border-radius:7px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
+  button.ghost{background:#1b2740;color:var(--ink);border:1px solid var(--line)}
+  button.ok{background:var(--ok)} button.bad{background:var(--bad)}
+  pre{background:#0a1020;border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;max-height:320px;font-size:12px;white-space:pre-wrap;word-break:break-word}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600}
+  .pill.low{background:#14331f;color:#7ee2a8} .pill.medium{background:#3a2c10;color:#f4c66b} .pill.high{background:#3a1414;color:#f49b9b}
+  .muted{color:var(--mut);font-size:12px}
+  code{background:#0a1020;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<header>
+  <b>CodexDominion</b><span class="tag">Pilot Control Console</span>
+  <div class="key">
+    <input id="apikey" placeholder="X-Api-Key (from seed_pilot.py)" size="34" />
+    <button class="ghost" onclick="saveKey()">Save key</button>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1 · Submit governed action</h2>
+    <p class="muted">AI Vendor / Automation Governance Review (needs an <code>Operator</code> or <code>Admin</code> key).</p>
+    <label>Vendor / system name</label><input id="vendor_name" value="VendorX Autopilot" />
+    <label>System type</label><input id="system_type" value="autonomous agent" />
+    <label>Intended use</label><input id="intended_use" value="customer outreach" />
+    <div class="row">
+      <div><label>Data sensitivity</label>
+        <select id="data_sensitivity"><option>internal</option><option>public</option><option>pii</option><option selected>regulated</option><option>phi</option></select></div>
+      <div><label>Autonomy</label>
+        <select id="autonomy_level"><option>assisted</option><option>semi_autonomous</option><option selected>autonomous</option><option>none</option></select></div>
+      <div><label>External exposure</label><br/><input type="checkbox" id="external_exposure" checked /></div>
+    </div>
+    <p><button onclick="submitReview()">Submit review</button></p>
+    <div id="submit_out"></div>
+  </section>
+
+  <section class="card">
+    <h2>2 · Run status</h2>
+    <label>Governed action id</label>
+    <div class="row"><div style="flex:3"><input id="run_id" placeholder="governed_action_id" style="width:100%" /></div>
+      <div><button class="ghost" onclick="getRun()">Refresh</button></div></div>
+    <div id="run_out"></div>
+  </section>
+
+  <section class="card">
+    <h2>3 · Approve / reject</h2>
+    <p class="muted">Needs a <code>Reviewer</code> (or Admin/Compliance) key.</p>
+    <label>Approval id</label><input id="approval_id" placeholder="approval_id" style="width:100%" />
+    <label>Note / reason</label><input id="decision_note" value="reviewed for pilot" style="width:100%" />
+    <p><button class="ok" onclick="decide('approve')">Approve</button>
+       <button class="bad" onclick="decide('reject')">Reject</button></p>
+    <div id="decide_out"></div>
+  </section>
+
+  <section class="card">
+    <h2>4 · Evidence packet</h2>
+    <p class="muted">Needs an <code>Auditor</code> / Admin key (<code>view_audit</code>).</p>
+    <label>Governed action id</label><input id="packet_id" placeholder="governed_action_id" style="width:100%" />
+    <p><button onclick="exportPacket('json')">Export JSON</button>
+       <button class="ghost" onclick="exportPacket('md')">Export Markdown</button></p>
+    <div id="packet_out"></div>
+  </section>
+
+  <section class="card full">
+    <h2>Response log</h2>
+    <pre id="log">Ready. Enter an API key (printed by scripts/seed_pilot.py) and submit a review.</pre>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+function apiKey(){ return $('apikey').value.trim(); }
+function saveKey(){ localStorage.setItem('cdx_key', apiKey()); log('API key saved to this browser.'); }
+function log(x){ $('log').textContent = (typeof x === 'string') ? x : JSON.stringify(x, null, 2); }
+window.addEventListener('load', () => { const k = localStorage.getItem('cdx_key'); if(k) $('apikey').value = k; });
+
+async function api(method, path, body){
+  const headers = {'X-Api-Key': apiKey()};
+  const opt = {method, headers};
+  if(body){ headers['Content-Type']='application/json'; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  const text = await r.text();
+  let data; try{ data = JSON.parse(text); }catch{ data = text; }
+  return {status:r.status, data};
+}
+function riskPill(risk){ if(!risk) return ''; const l=risk.level; return `<span class="pill ${l}">risk: ${l} (${risk.score})</span>`; }
+
+async function submitReview(){
+  const body = {
+    vendor_name: $('vendor_name').value, system_type: $('system_type').value,
+    intended_use: $('intended_use').value, data_sensitivity: $('data_sensitivity').value,
+    autonomy_level: $('autonomy_level').value, external_exposure: $('external_exposure').checked,
+  };
+  const {status, data} = await api('POST','/workflows/vendor-governance-review', body);
+  log(data);
+  if(status === 200){
+    $('run_id').value = data.governed_action_id; $('packet_id').value = data.governed_action_id;
+    if(data.approval_id) $('approval_id').value = data.approval_id;
+    $('submit_out').innerHTML =
+      `${riskPill(data.risk)} <span class="pill ${data.requires_approval?'medium':'low'}">${data.status}</span>`
+      + `<div class="muted">policy: ${data.policy.category}${data.requires_approval?' · approval required':''}</div>`;
+  } else { $('submit_out').innerHTML = `<span class="pill high">HTTP ${status}</span>`; }
+}
+
+async function getRun(){
+  const id = $('run_id').value.trim(); if(!id) return;
+  const {status, data} = await api('GET', `/workflows/runs/${id}`);
+  log(data);
+  $('run_out').innerHTML = (status===200)
+    ? `${riskPill(data.risk)} <span class="pill ${data.status==='approved'?'low':(data.status==='rejected'?'high':'medium')}">${data.status}</span>`
+      + `<div class="muted">approval: ${data.approval_status||'n/a'} · audit events: ${data.audit_event_count} · artifacts: ${data.evidence_artifact_count}</div>`
+    : `<span class="pill high">HTTP ${status}</span>`;
+}
+
+async function decide(kind){
+  const id = $('approval_id').value.trim(); if(!id) return;
+  const body = (kind==='approve') ? {actor:'reviewer', note:$('decision_note').value}
+                                  : {actor:'reviewer', reason:$('decision_note').value};
+  const {status, data} = await api('POST', `/approvals/${id}/${kind}`, body);
+  log(data);
+  $('decide_out').innerHTML = `<span class="pill ${status===200?(kind==='approve'?'low':'high'):'medium'}">${kind} → HTTP ${status}</span>`;
+  if(status===200 && $('run_id').value) getRun();
+}
+
+async function exportPacket(fmt){
+  const id = $('packet_id').value.trim(); if(!id) return;
+  const r = await fetch(`/evidence/packets/export/${id}?format=${fmt}`, {headers:{'X-Api-Key':apiKey()}});
+  const text = await r.text();
+  if(r.status !== 200){ log(`HTTP ${r.status}\n`+text); $('packet_out').innerHTML=`<span class="pill high">HTTP ${r.status}</span>`; return; }
+  log(text);
+  const blob = new Blob([text], {type: fmt==='json'?'application/json':'text/markdown'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=`evidence_packet_${id}.${fmt}`; a.textContent='Download '+fmt.toUpperCase();
+  $('packet_out').innerHTML=''; $('packet_out').appendChild(a);
+}
+</script>
+</body>
+</html>
