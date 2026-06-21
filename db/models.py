@@ -405,4 +405,8 @@ class EvidencePacket(Base):
     json_export: Mapped[str | None] = mapped_column(Text, nullable=True)
     markdown_export: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    # Persistence (PR 14): integrity hash, per-scope version, retention lifecycle.
+    packet_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    retention_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

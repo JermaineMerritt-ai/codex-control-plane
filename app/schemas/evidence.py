@@ -2,9 +2,40 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+
+class StoredPacketResponse(BaseModel):
+    id: str
+    tenant_id: str | None = None
+    scope_type: str
+    scope_id: str | None = None
+    version: int | None = None
+    packet_hash: str | None = None
+    retention_status: str
+    created_by_user_id: str | None = None
+    created_at: datetime
+
+
+class StoredPacketListResponse(BaseModel):
+    items: list[StoredPacketResponse] = Field(default_factory=list)
+
+
+def stored_packet_to_response(row: Any) -> StoredPacketResponse:
+    return StoredPacketResponse(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        scope_type=row.scope_type,
+        scope_id=row.scope_id,
+        version=row.version,
+        packet_hash=row.packet_hash,
+        retention_status=row.retention_status,
+        created_by_user_id=row.created_by_user_id,
+        created_at=row.created_at,
+    )
 
 
 class GraphRef(BaseModel):

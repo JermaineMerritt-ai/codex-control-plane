@@ -15,11 +15,14 @@ from app.schemas.evidence import (
     AiSystemListResponse,
     EvidenceGraphResponse,
     GovernedActionListResponse,
+    StoredPacketListResponse,
+    StoredPacketResponse,
     ai_system_to_summary,
     governed_action_to_summary,
     graph_to_response,
+    stored_packet_to_response,
 )
-from services import evidence_graph, evidence_packet
+from services import evidence_graph, evidence_packet, evidence_store
 from services.rbac_service import Principal
 
 router = APIRouter(prefix="/evidence", tags=["evidence"])
@@ -107,3 +110,64 @@ def export_packet(
     return Response(
         content=evidence_packet.render_json(packet), media_type="application/json"
     )
+
+
+# --- Persisted packets (PR 14) ---------------------------------------------
+
+@router.post("/packets/action/{governed_action_id}/persist", response_model=StoredPacketResponse)
+def persist_action_packet(
+    governed_action_id: str,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_permission("export_evidence")),
+):
+    """Build and PERSIST a governed-action packet (versioned, hash-stamped).
+    Distinct from the ephemeral /packets/action/{id} and /packets/export/{id}."""
+    packet = evidence_packet.build_action_packet(
+        db, governed_action_id=governed_action_id, tenant_id=principal.tenant_id
+    )
+    if packet is None:
+        raise HTTPException(status_code=404, detail="governed_action_not_found")
+    row = evidence_store.persist_packet(
+        db, tenant_id=principal.tenant_id, packet=packet, generated_by=principal.user_id
+    )
+    return stored_packet_to_response(row)
+
+
+@router.get("/packets", response_model=StoredPacketListResponse)
+def list_stored_packets(
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_permission("view_audit")),
+):
+    rows = evidence_store.list_packets(db, tenant_id=principal.tenant_id)
+    return StoredPacketListResponse(items=[stored_packet_to_response(r) for r in rows])
+
+
+@router.get("/packets/{packet_id}", response_model=StoredPacketResponse)
+def get_stored_packet(
+    packet_id: str,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_permission("view_audit")),
+):
+    row = evidence_store.get_packet(db, packet_id, tenant_id=principal.tenant_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="packet_not_found")
+    return stored_packet_to_response(row)
+
+
+@router.get("/packets/{packet_id}/download")
+def download_stored_packet(
+    packet_id: str,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_permission("export_evidence")),
+    format: str = Query(default="json", pattern="^(json|md)$"),
+):
+    """Download a STORED packet (records an evidence.packet.downloaded audit event)."""
+    row = evidence_store.get_packet(db, packet_id, tenant_id=principal.tenant_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="packet_not_found")
+    evidence_store.record_download(
+        db, packet=row, fmt=format, tenant_id=principal.tenant_id, downloaded_by=principal.user_id
+    )
+    if format == "md":
+        return PlainTextResponse(row.markdown_export or "", media_type="text/markdown")
+    return Response(content=row.json_export or "{}", media_type="application/json")
