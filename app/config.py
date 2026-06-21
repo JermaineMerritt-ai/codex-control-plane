@@ -26,9 +26,17 @@ class Settings(BaseSettings):
     require_rbac_for_operator: bool = Field(
         default=False,
         description=(
-            "Future hardening. When True, the no-API-key operator/system path is "
-            "NOT a full-access bypass and protected actions require RBAC. Default "
-            "False in PR 4 to preserve the local demo and worker."
+            "When True, the no-API-key operator/system path is NOT a full-access "
+            "bypass and protected actions require RBAC. Independent hard switch in "
+            "addition to app_env."
+        ),
+    )
+    app_env: Literal["demo", "staging", "production"] = Field(
+        default="demo",
+        description=(
+            "Runtime mode. The no-API-key operator bypass is enabled ONLY in 'demo'. "
+            "In 'staging' and 'production' every protected action requires an "
+            "authenticated principal (no bypass)."
         ),
     )
 
