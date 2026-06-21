@@ -147,8 +147,12 @@ def resolve_principal(session: Session, *, api_key: str | None) -> Principal:
     if not api_key:
         from app.config import get_settings
 
-        # Operator/system bypass unless explicitly hardened off.
-        is_operator = not get_settings().require_rbac_for_operator
+        settings = get_settings()
+        # Operator/system bypass is enabled ONLY in demo mode and only when not
+        # explicitly hardened off. In staging/production the no-key path carries
+        # no permissions, so every protected action requires an authenticated
+        # principal (resolve to 403 at require_permission).
+        is_operator = (settings.app_env == "demo") and (not settings.require_rbac_for_operator)
         return Principal(tenant_id=None, user_id=None, permissions=frozenset(), is_operator=is_operator)
 
     row = session.execute(
