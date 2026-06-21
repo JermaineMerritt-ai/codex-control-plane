@@ -2,9 +2,46 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+
+class OverrideRequest(BaseModel):
+    reason: str = Field(..., min_length=1)
+    authority_basis: str = Field(..., min_length=1)
+    compensating_control: str = Field(..., min_length=1)
+    accepted_risk: str | None = None
+    expiration: datetime | None = None  # metadata-only in the pilot (not enforced)
+
+
+class OverrideResponse(BaseModel):
+    id: str
+    governed_action_id: str
+    overridden_by_user_id: str | None = None
+    reason: str
+    authority_basis: str
+    accepted_risk: str | None = None
+    compensating_control: str
+    expiration: datetime | None = None
+    status: str
+    created_at: datetime
+
+
+def override_to_response(row: Any) -> "OverrideResponse":
+    return OverrideResponse(
+        id=row.id,
+        governed_action_id=row.governed_action_id,
+        overridden_by_user_id=row.overridden_by_user_id,
+        reason=row.reason,
+        authority_basis=row.authority_basis,
+        accepted_risk=row.accepted_risk,
+        compensating_control=row.compensating_control,
+        expiration=row.expiration,
+        status=row.status,
+        created_at=row.created_at,
+    )
 
 
 class VendorGovernanceReviewRequest(BaseModel):

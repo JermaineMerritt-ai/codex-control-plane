@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from db.models import (
+    ActionOverride,
     AiSystem,
     ApprovalRequest,
     AuditEvent,
@@ -264,6 +265,11 @@ def get_evidence_graph(
 
     artifacts = list_evidence_artifacts(session, tenant_id=tenant_id, governed_action_id=action.id)
 
+    ov_stmt = select(ActionOverride).where(ActionOverride.governed_action_id == action.id)
+    if tenant_id is not None:
+        ov_stmt = ov_stmt.where(ActionOverride.tenant_id == tenant_id)
+    overrides = list(session.execute(ov_stmt).scalars().all())
+
     return {
         "governed_action": action,
         "ai_system": ai_system,
@@ -275,4 +281,5 @@ def get_evidence_graph(
         "audit_events": audit_events,
         "control_mappings": control_mappings,
         "evidence_artifacts": artifacts,
+        "overrides": overrides,
     }

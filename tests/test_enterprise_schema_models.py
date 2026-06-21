@@ -59,6 +59,7 @@ def test_role_and_permission_constants_exist():
         "manage_policies",
         "manage_controls",
         "manage_users",
+        "override_high_risk_action",
     }
 
 

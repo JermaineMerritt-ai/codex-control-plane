@@ -63,6 +63,10 @@ def _effective_action_status(action: Any, approval: Any) -> str:
     Phase-1) approval transition. So when a governed action has a linked
     approval, render the action's status from that approval's final state.
     """
+    # A recorded human override is a terminal authorization decision and takes
+    # precedence over the (possibly still-pending) approval gate for display.
+    if action.status == "override_recorded":
+        return "override_recorded"
     if approval is not None:
         return _APPROVAL_STATUS_MAP.get(approval.status, action.status)
     return action.status
@@ -88,6 +92,7 @@ def _assemble(
     mapped_controls: list[dict[str, Any]] = []
     mapped_regulations: set[str] = set()
     evidence_artifacts: list[dict[str, Any]] = []
+    overrides: list[dict[str, Any]] = []
     gaps: set[str] = set()
 
     for graph in graphs:
@@ -176,6 +181,21 @@ def _assemble(
         else:
             gaps.add("missing_evidence_artifacts")
 
+        for ov in graph.get("overrides", []):
+            overrides.append(
+                {
+                    "governed_action_id": action.id,
+                    "id": ov.id,
+                    "overridden_by_user_id": ov.overridden_by_user_id,
+                    "reason": ov.reason,
+                    "authority_basis": ov.authority_basis,
+                    "accepted_risk": ov.accepted_risk,
+                    "compensating_control": ov.compensating_control,
+                    "expiration": ov.expiration.isoformat() if ov.expiration else None,
+                    "status": ov.status,
+                }
+            )
+
     if verification["status"] == "failed":
         gaps.add("broken_audit_chain")
 
@@ -198,6 +218,7 @@ def _assemble(
         "mapped_controls": mapped_controls,
         "mapped_regulations": sorted(mapped_regulations),
         "evidence_artifacts": evidence_artifacts,
+        "overrides": overrides,
         "evidence_gaps": sorted(gaps),
         "disclaimer": DISCLAIMER,
     }
@@ -335,6 +356,16 @@ def render_markdown(packet: dict[str, Any]) -> str:
         "",
         "## Approvals",
         _md_list([f"{a['status']} (`{a['id']}`)" for a in packet["approvals"]]),
+        "",
+        "## Human overrides",
+        _md_list(
+            [
+                f"{o['accepted_risk']} risk accepted by {o['overridden_by_user_id']} — "
+                f"authority: {o['authority_basis']}; control: {o['compensating_control']}"
+                f"{('; expires ' + o['expiration']) if o['expiration'] else ''} (`{o['id']}`)"
+                for o in packet.get("overrides", [])
+            ]
+        ),
         "",
         "## Policy decisions",
         _md_list([f"{p['decision']} (version {p['policy_version']})" for p in packet["policy_decisions"]]),

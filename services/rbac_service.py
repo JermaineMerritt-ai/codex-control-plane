@@ -27,7 +27,7 @@ from db.governance_seed import PERMISSION_NAMES
 from db.models import ApiKey, Permission, Role, RolePermission, User, UserRole
 from services.tenant_service import InvalidApiKey, hash_api_key
 
-# --- Permission catalog (the 9 governance permissions) ---------------------
+# --- Permission catalog (governance permissions) ---------------------------
 P_CREATE = "create_governed_action"
 P_APPROVE = "approve_action"
 P_REJECT = "reject_action"
@@ -37,6 +37,7 @@ P_EXPORT_EVIDENCE = "export_evidence"
 P_MANAGE_POLICIES = "manage_policies"
 P_MANAGE_CONTROLS = "manage_controls"
 P_MANAGE_USERS = "manage_users"
+P_OVERRIDE = "override_high_risk_action"
 
 # --- Role -> permission matrix (system roles, tenant-agnostic templates) ----
 ROLE_PERMISSIONS: dict[str, set[str]] = {
@@ -49,6 +50,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         P_EXPORT_EVIDENCE,
         P_MANAGE_CONTROLS,
         P_MANAGE_POLICIES,
+        P_OVERRIDE,
     },
     "Auditor": {P_VIEW_AUDIT, P_EXPORT_EVIDENCE},
     "Operator": {P_CREATE, P_EXECUTE, P_VIEW_AUDIT},

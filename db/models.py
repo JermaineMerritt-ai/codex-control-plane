@@ -421,3 +421,27 @@ class EvidencePacket(Base):
     version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     retention_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ActionOverride(Base):
+    """Human override of a high-risk governed action (PR 16).
+
+    Records an authorized decision to accept risk; it does NOT execute the action.
+    `expiration` is metadata-only in the pilot (captured, not enforced).
+    """
+
+    __tablename__ = "action_overrides"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    tenant_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=True, index=True)
+    governed_action_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("governed_actions.id"), nullable=False, index=True
+    )
+    overridden_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    authority_basis: Mapped[str] = mapped_column(String(255), nullable=False)
+    accepted_risk: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    compensating_control: Mapped[str] = mapped_column(Text, nullable=False)
+    expiration: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="override_recorded")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
