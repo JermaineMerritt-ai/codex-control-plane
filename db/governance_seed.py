@@ -27,6 +27,7 @@ PERMISSION_NAMES: tuple[str, ...] = (
     "manage_policies",
     "manage_controls",
     "manage_users",
+    "override_high_risk_action",
 )
 
 INITIAL_CONTROL_FRAMEWORK_NAMES: tuple[str, ...] = (

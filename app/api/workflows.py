@@ -12,13 +12,16 @@ from sqlalchemy.orm import Session
 
 from app.deps import get_db, require_permission
 from app.schemas.workflows import (
+    OverrideRequest,
+    OverrideResponse,
     VendorGovernanceReviewRequest,
     WorkflowRunDetail,
     WorkflowRunListResponse,
     WorkflowRunResponse,
     WorkflowRunSummary,
+    override_to_response,
 )
-from services import governance_workflow
+from services import governance_workflow, override_service
 from services.rbac_service import Principal
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
@@ -64,3 +67,30 @@ def get_run(
     if run is None:
         raise HTTPException(status_code=404, detail="run_not_found")
     return WorkflowRunDetail(**run)
+
+
+@router.post("/runs/{governed_action_id}/override", response_model=OverrideResponse)
+def override_run(
+    governed_action_id: str,
+    body: OverrideRequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_permission("override_high_risk_action")),
+):
+    """Record an authorized human override of a high-risk action (does NOT execute
+    it). Requires the override authority permission."""
+    try:
+        row = override_service.create_override(
+            db,
+            tenant_id=principal.tenant_id,
+            governed_action_id=governed_action_id,
+            overridden_by=principal.user_id,
+            reason=body.reason,
+            authority_basis=body.authority_basis,
+            compensating_control=body.compensating_control,
+            accepted_risk=body.accepted_risk,
+            expiration=body.expiration,
+        )
+    except ValueError as exc:
+        status = 404 if str(exc) == "governed_action_not_found" else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    return override_to_response(row)
