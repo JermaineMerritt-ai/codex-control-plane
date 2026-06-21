@@ -15,6 +15,7 @@ from app.api.controls import router as controls_router
 from app.api.email import router as email_router
 from app.api.evidence import router as evidence_router
 from app.api.jobs import router as jobs_router
+from app.api.policies import router as policies_router
 from app.api.workflows import router as workflows_router
 from app.middleware.operator_auth import OperatorAuthMiddleware
 from app.deps import get_current_tenant_id, get_db
@@ -34,11 +35,13 @@ async def lifespan(app: FastAPI):
     app.state.session_factory = get_session_factory(engine)
     # Seed RBAC + control catalog (both idempotent) so the running app is usable.
     from services.control_catalog import seed_control_catalog
+    from services.policy_version_service import seed_default_policy
     from services.rbac_service import seed_rbac
 
     with app.state.session_factory() as session:
         seed_rbac(session)
         seed_control_catalog(session)
+        seed_default_policy(session)
     yield
     engine.dispose()
 
@@ -58,6 +61,7 @@ app.include_router(email_router)
 app.include_router(controls_router)
 app.include_router(evidence_router)
 app.include_router(workflows_router)
+app.include_router(policies_router)
 
 
 @app.get("/health")

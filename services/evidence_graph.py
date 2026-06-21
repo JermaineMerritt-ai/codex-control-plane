@@ -93,15 +93,18 @@ def create_governed_action(
     workflow_id: str | None = None, source_job_id: str | None = None,
     approval_id: str | None = None, execution_job_id: str | None = None,
     policy_version: str | None = None, policy_decision: str | None = None,
+    policy_version_id: str | None = None,
     status: str = "pending", metadata: dict[str, Any] | None = None,
 ) -> GovernedAction:
     """Create a governed-action graph node. The link fields (source_job_id,
     approval_id, execution_job_id, workflow_id) connect existing execution
-    concepts to the graph without changing the pipeline."""
+    concepts to the graph without changing the pipeline. `policy_version_id`
+    immutably binds the action to the exact policy version in effect (PR 15)."""
     row = GovernedAction(
         tenant_id=tenant_id, action_type=action_type, workflow_id=workflow_id,
         source_job_id=source_job_id, approval_id=approval_id, execution_job_id=execution_job_id,
-        policy_version=policy_version, policy_decision=policy_decision, status=status,
+        policy_version=policy_version, policy_decision=policy_decision,
+        policy_version_id=policy_version_id, status=status,
         metadata_json=json.dumps(metadata) if metadata else None,
     )
     session.add(row)
