@@ -14,6 +14,7 @@ from app.api.audit import router as audit_router
 from app.api.controls import router as controls_router
 from app.api.email import router as email_router
 from app.api.evidence import router as evidence_router
+from app.api.incidents import router as incidents_router
 from app.api.jobs import router as jobs_router
 from app.api.policies import router as policies_router
 from app.api.workflows import router as workflows_router
@@ -62,6 +63,7 @@ app.include_router(controls_router)
 app.include_router(evidence_router)
 app.include_router(workflows_router)
 app.include_router(policies_router)
+app.include_router(incidents_router)
 
 
 @app.get("/health")
