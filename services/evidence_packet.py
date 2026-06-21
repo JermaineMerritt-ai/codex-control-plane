@@ -111,6 +111,7 @@ def _assemble(
             {
                 "governed_action_id": action.id,
                 "policy_version": graph["policy_decision"]["version"],
+                "policy_version_id": action.policy_version_id,
                 "decision": graph["policy_decision"]["decision"],
             }
         )

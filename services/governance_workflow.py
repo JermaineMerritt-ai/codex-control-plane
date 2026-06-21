@@ -18,7 +18,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from services import approval_service, audit_service, evidence_graph
+from services import approval_service, audit_service, evidence_graph, policy_version_service
 from services.policy_service import PolicyCategory, evaluate_action
 from services.risk_service import RiskResult, classify_risk
 
@@ -98,12 +98,19 @@ def submit_vendor_governance_review(
     else:
         status = "cleared"
 
+    # Bind to the exact active policy version in effect (PR 15); fall back to the
+    # static label if no version is registered.
+    active_policy = policy_version_service.get_active(session, tenant_id=tenant_id)
+    policy_version_id = active_policy.id if active_policy is not None else None
+    policy_version_label = active_policy.version if active_policy is not None else POLICY_VERSION
+
     # 3) Governed action record (the graph hub).
     action = evidence_graph.create_governed_action(
         session,
         tenant_id=tenant_id,
         action_type=ACTION_TYPE,
-        policy_version=POLICY_VERSION,
+        policy_version=policy_version_label,
+        policy_version_id=policy_version_id,
         policy_decision=category.value,
         status=status,
         metadata={
@@ -113,6 +120,8 @@ def submit_vendor_governance_review(
                 "requires_approval": policy.requires_approval,
                 "blocked": policy.blocked,
                 "reason": policy.reason,
+                "policy_version_id": policy_version_id,
+                "policy_version": policy_version_label,
             },
             "risk": {"level": risk.level, "score": risk.score, "reasons": risk.reasons},
         },

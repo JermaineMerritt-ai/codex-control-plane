@@ -120,6 +120,13 @@ class GovernancePolicy(Base):
     version: Mapped[str] = mapped_column(String(64), nullable=False, default="v1")
     rules_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Policy versioning (PR 15): lifecycle + provenance. `id` is the policy_version_id.
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    effective_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    effective_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    approved_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -326,6 +333,10 @@ class GovernedAction(Base):
     execution_job_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("jobs.id"), nullable=True, index=True)
     action_type: Mapped[str] = mapped_column(String(128), nullable=False)
     policy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Immutable binding to the exact policy version in effect at decision time (PR 15).
+    policy_version_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("governance_policies.id"), nullable=True, index=True
+    )
     policy_decision: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="pending", index=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
