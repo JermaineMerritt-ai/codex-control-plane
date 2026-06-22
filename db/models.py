@@ -477,3 +477,40 @@ class TrustScore(Base):
     score_breakdown: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TrustVerification(Base):
+    """Procurement verification of a governed subject (PR 21).
+
+    A reviewable lifecycle (requested -> under_review -> approved ->
+    revoked/rejected) that consumes existing artifacts: the subject's signed
+    `EvidencePacket` (verified valid) and its `TrustScore` (must meet a required
+    minimum). It does not re-derive evidence or scores. Verification supports
+    procurement validation; it is not a certification or guarantee of compliance.
+    """
+
+    __tablename__ = "trust_verifications"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    tenant_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=True, index=True)
+    # subject_type in {governed_action, ...}; subject_id is its id. v0 supports
+    # governed_action (a vendor/automation governance review).
+    subject_type: Mapped[str] = mapped_column(String(32), nullable=False, default="governed_action")
+    subject_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="requested", index=True)
+    evidence_packet_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("evidence_packets.id"), nullable=True
+    )
+    trust_score_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("trust_scores.id"), nullable=True
+    )
+    trust_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    min_score_required: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    requested_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    reviewed_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    decided_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decision_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
