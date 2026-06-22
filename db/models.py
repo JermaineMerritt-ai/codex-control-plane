@@ -445,3 +445,28 @@ class ActionOverride(Base):
     expiration: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="override_recorded")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TrustScore(Base):
+    """Explainable trust score for a scope (PR 18, Trust Score v0).
+
+    Scores are derived from existing systems (audit chain, evidence packet,
+    governance graph, control mappings, RBAC) — see
+    `services/trust_score_service.py`. `score_breakdown` is the full per-dimension
+    explanation (points earned/possible + reasons); there is no black-box score.
+    Trust scores support governance review; they are not a certification or a
+    guarantee of compliance.
+    """
+
+    __tablename__ = "trust_scores"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    tenant_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=True, index=True)
+    # scope_type in {governed_action, workflow, ai_system, tenant}; scope_id is its id.
+    scope_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    scope_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    score_band: Mapped[str] = mapped_column(String(32), nullable=False)
+    score_breakdown: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
