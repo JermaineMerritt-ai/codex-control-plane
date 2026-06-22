@@ -308,3 +308,28 @@ def get_latest(
     if tenant_id is not None:
         q = q.filter(TrustScore.tenant_id == tenant_id)
     return q.order_by(TrustScore.version.desc()).first()
+
+
+def stored_to_dict(row: TrustScore) -> dict[str, Any]:
+    """Serialize a persisted trust score (read path); no recomputation."""
+    return {
+        "score_id": row.id,
+        "tenant_id": row.tenant_id,
+        "scope_type": row.scope_type,
+        "scope_id": row.scope_id,
+        "version": row.version,
+        "score": row.score,
+        "score_band": row.score_band,
+        "max_score": 100,
+        "breakdown": json.loads(row.score_breakdown) if row.score_breakdown else [],
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "disclaimer": DISCLAIMER,
+    }
+
+
+def latest_result(
+    session: Session, *, scope_type: str, scope_id: str, tenant_id: str | None = None
+) -> dict[str, Any] | None:
+    """Read the latest stored score for a scope, or None if none computed yet."""
+    row = get_latest(session, scope_type=scope_type, scope_id=scope_id, tenant_id=tenant_id)
+    return stored_to_dict(row) if row is not None else None
