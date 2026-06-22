@@ -18,10 +18,19 @@ class StoredPacketResponse(BaseModel):
     retention_status: str
     created_by_user_id: str | None = None
     created_at: datetime
+    # Signing (PR 20)
+    signature_algorithm: str | None = None
+    signed_at: datetime | None = None
+    expires_at: datetime | None = None
+    revoked_at: datetime | None = None
 
 
 class StoredPacketListResponse(BaseModel):
     items: list[StoredPacketResponse] = Field(default_factory=list)
+
+
+class RevokePacketRequest(BaseModel):
+    reason: str
 
 
 def stored_packet_to_response(row: Any) -> StoredPacketResponse:
@@ -35,6 +44,10 @@ def stored_packet_to_response(row: Any) -> StoredPacketResponse:
         retention_status=row.retention_status,
         created_by_user_id=row.created_by_user_id,
         created_at=row.created_at,
+        signature_algorithm=getattr(row, "signature_algorithm", None),
+        signed_at=getattr(row, "signed_at", None),
+        expires_at=getattr(row, "expires_at", None),
+        revoked_at=getattr(row, "revoked_at", None),
     )
 
 

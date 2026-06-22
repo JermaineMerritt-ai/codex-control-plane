@@ -39,6 +39,21 @@ class Settings(BaseSettings):
             "authenticated principal (no bypass)."
         ),
     )
+    evidence_signing_key: str | None = Field(
+        default=None,
+        description=(
+            "Ed25519 private seed (64-char hex / 32 bytes) used to sign evidence "
+            "packets. NON-PRODUCTION: if unset, a fixed, publicly-known PILOT key is "
+            "used. This is pilot-grade signing for evaluation only -- NOT production "
+            "signing. Production signing requires managed keys (KMS/HSM) and key "
+            "rotation, which are NOT implemented yet. Do not represent signed packets "
+            "as production-grade until that work lands."
+        ),
+    )
+    evidence_packet_ttl_days: int = Field(
+        default=365,
+        description="Validity window applied to a signed evidence packet's expires_at.",
+    )
 
     @model_validator(mode="after")
     def live_gmail_requires_credentials_file(self) -> Settings:

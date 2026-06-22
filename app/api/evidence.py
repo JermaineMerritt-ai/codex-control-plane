@@ -15,6 +15,7 @@ from app.schemas.evidence import (
     AiSystemListResponse,
     EvidenceGraphResponse,
     GovernedActionListResponse,
+    RevokePacketRequest,
     StoredPacketListResponse,
     StoredPacketResponse,
     ai_system_to_summary,
@@ -22,7 +23,7 @@ from app.schemas.evidence import (
     graph_to_response,
     stored_packet_to_response,
 )
-from services import evidence_graph, evidence_packet, evidence_store
+from services import evidence_graph, evidence_packet, evidence_signature_service, evidence_store
 from services.rbac_service import Principal
 
 router = APIRouter(prefix="/evidence", tags=["evidence"])
@@ -151,6 +152,38 @@ def get_stored_packet(
     row = evidence_store.get_packet(db, packet_id, tenant_id=principal.tenant_id)
     if row is None:
         raise HTTPException(status_code=404, detail="packet_not_found")
+    return stored_packet_to_response(row)
+
+
+@router.get("/verify/{packet_id}")
+def verify_packet(
+    packet_id: str,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_permission("view_audit")),
+):
+    """Verify a stored evidence packet's signature + integrity. Procurement-safe:
+    returns valid | expired | revoked | tampered | unsigned (404 if not found /
+    cross-tenant), each with reasons and the public key for independent checking."""
+    row = evidence_store.get_packet(db, packet_id, tenant_id=principal.tenant_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="not_found")
+    return evidence_signature_service.verify_packet(row)
+
+
+@router.post("/packets/{packet_id}/revoke", response_model=StoredPacketResponse)
+def revoke_packet(
+    packet_id: str,
+    body: RevokePacketRequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_permission("export_evidence")),
+):
+    """Revoke a stored packet (verification will report `revoked`). Does not delete it."""
+    row = evidence_store.get_packet(db, packet_id, tenant_id=principal.tenant_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="not_found")
+    row = evidence_signature_service.revoke_packet(
+        db, packet=row, reason=body.reason, revoked_by=principal.user_id
+    )
     return stored_packet_to_response(row)
 
 

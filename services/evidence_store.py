@@ -83,6 +83,11 @@ def persist_packet(
         metadata={"scope_type": scope_type, "scope_id": scope_id,
                   "version": version, "packet_hash": row.packet_hash},
     )
+    # Sign the persisted packet so it is verifiable (PR 20). Lazy import avoids a
+    # module cycle (the signature service depends on this module's hash helper).
+    from services import evidence_signature_service
+
+    evidence_signature_service.sign_packet(session, packet=row, signed_by=generated_by)
     return row
 
 
