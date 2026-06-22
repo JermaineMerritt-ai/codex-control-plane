@@ -93,22 +93,34 @@ def test_score_action_tenant_isolation():
         assert trust_score_service.score_action(s, governed_action_id=gid, tenant_id="A") is not None
 
 
-def test_trust_endpoints_rbac_and_shape():
+def test_trust_endpoints_read_compute_split_rbac_and_shape():
     with _factory()() as s:
         seed_pilot(s)
         gid = governance_workflow.list_runs(s, tenant_id=DEMO_TENANT_ID)[0]["governed_action_id"]
         tenant_service.provision_api_key(s, tenant_id=DEMO_TENANT_ID, name="nouser", raw_key="nouser-trust")
 
+    AUD = {"X-Api-Key": "pilot-auditor-key"}    # view_audit + export_evidence
+    OP = {"X-Api-Key": "pilot-operator-key"}    # view_audit, NO export_evidence
     with TestClient(app) as client:
-        # Auditor (view_audit) can read; response carries an explainable breakdown.
-        r = client.get(f"/trust/score/{gid}", headers={"X-Api-Key": "pilot-auditor-key"})
-        assert r.status_code == 200
-        body = r.json()
+        # Read before any compute -> 404 (GET never creates).
+        assert client.get(f"/trust/score/{gid}", headers=AUD).status_code == 404
+        # Compute requires a write permission: operator lacks export_evidence -> 403.
+        assert client.post(f"/trust/compute/{gid}", headers=OP).status_code == 403
+        # Auditor computes (write) -> 200 with explainable breakdown.
+        c = client.post(f"/trust/compute/{gid}", headers=AUD)
+        assert c.status_code == 200
+        body = c.json()
         assert body["score_band"] == band_for(body["score"])
         assert len(body["breakdown"]) == 10
-        # Tenant + workflow scopes resolve.
-        assert client.get(f"/trust/tenant/{DEMO_TENANT_ID}", headers={"X-Api-Key": "pilot-auditor-key"}).status_code == 200
-        # No view_audit -> 403.
+        # Now the read returns the stored score (non-mutating); version stays 1.
+        r1 = client.get(f"/trust/score/{gid}", headers=AUD)
+        r2 = client.get(f"/trust/score/{gid}", headers=AUD)
+        assert r1.status_code == 200 and r1.json()["version"] == 1
+        assert r2.json()["version"] == 1  # GET did not bump the version
+        # Tenant scope: compute then read.
+        assert client.post(f"/trust/compute/tenant/{DEMO_TENANT_ID}", headers=AUD).status_code == 200
+        assert client.get(f"/trust/tenant/{DEMO_TENANT_ID}", headers=AUD).status_code == 200
+        # No view_audit -> 403 on read.
         assert client.get(f"/trust/score/{gid}", headers={"X-Api-Key": "nouser-trust"}).status_code == 403
-        # Unknown action -> 404.
-        assert client.get("/trust/score/nope", headers={"X-Api-Key": "pilot-auditor-key"}).status_code == 404
+        # Unknown action compute -> 404.
+        assert client.post("/trust/compute/nope", headers=AUD).status_code == 404
