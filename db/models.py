@@ -420,6 +420,13 @@ class EvidencePacket(Base):
     packet_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     retention_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    # Signing (PR 20): authenticity signature over the packet hash + lifecycle.
+    packet_signature: Mapped[str | None] = mapped_column(Text, nullable=True)
+    signature_algorithm: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revocation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
