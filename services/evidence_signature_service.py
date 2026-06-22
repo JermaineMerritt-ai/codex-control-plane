@@ -6,10 +6,13 @@ content hash. Verification is procurement-safe and explainable — it returns on
 `valid | expired | revoked | tampered | unsigned` with human-readable reasons, and
 publishes the public key so a third party can verify independently.
 
-This is pilot-grade signing: a single Ed25519 key (from settings, or a fixed PILOT
-key if unset). Key management / HSM / external anchoring are deferred. Signatures
-support evidence verification; they are not a certification or guarantee of
-compliance.
+NON-PRODUCTION / pilot-grade signing. This uses a single Ed25519 key (from
+settings, or a fixed, publicly-known PILOT key if unset). It is for evaluation
+only and is NOT production-grade signing: managed key storage (KMS/HSM), key
+rotation, and external audit anchoring are NOT implemented yet and are deferred.
+Until that work lands, do not represent these signatures as production-grade.
+Signatures support evidence verification; they are not a certification or
+guarantee of compliance.
 """
 
 from __future__ import annotations
@@ -31,9 +34,11 @@ from services import audit_service, evidence_store
 
 ALGORITHM = "Ed25519"
 
-# Fixed PILOT seed used only when no signing key is configured. NOT a production
-# key — clearly deterministic so demos are reproducible. Override with
-# settings.evidence_signing_key (64-char hex) before any real use.
+# NON-PRODUCTION fixed PILOT seed, used only when no signing key is configured.
+# This value is committed to source and therefore PUBLICLY KNOWN — anyone can forge
+# signatures under it. It exists solely so evaluation demos are reproducible. It is
+# NOT a production key; replace it with a managed key (settings.evidence_signing_key,
+# 64-char hex) backed by KMS/HSM + rotation before any real or hosted deployment.
 _PILOT_SEED_HEX = "00" * 31 + "01"
 
 

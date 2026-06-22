@@ -43,8 +43,11 @@ class Settings(BaseSettings):
         default=None,
         description=(
             "Ed25519 private seed (64-char hex / 32 bytes) used to sign evidence "
-            "packets. If unset, a fixed PILOT key is used (clearly not a production "
-            "HSM). Rotate / supply a managed key before any real deployment."
+            "packets. NON-PRODUCTION: if unset, a fixed, publicly-known PILOT key is "
+            "used. This is pilot-grade signing for evaluation only -- NOT production "
+            "signing. Production signing requires managed keys (KMS/HSM) and key "
+            "rotation, which are NOT implemented yet. Do not represent signed packets "
+            "as production-grade until that work lands."
         ),
     )
     evidence_packet_ttl_days: int = Field(
