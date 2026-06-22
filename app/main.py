@@ -18,6 +18,7 @@ from app.api.incidents import router as incidents_router
 from app.api.jobs import router as jobs_router
 from app.api.policies import router as policies_router
 from app.api.trust import router as trust_router
+from app.api.verification import router as verification_router
 from app.api.workflows import router as workflows_router
 from app.middleware.operator_auth import OperatorAuthMiddleware
 from app.deps import get_current_tenant_id, get_db
@@ -66,6 +67,7 @@ app.include_router(workflows_router)
 app.include_router(policies_router)
 app.include_router(incidents_router)
 app.include_router(trust_router)
+app.include_router(verification_router)
 
 
 @app.get("/health")
